@@ -10,9 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
-	"github.com/dvgamerr/crontab/app"
+	"github.com/dvgamerr-app/crontab-windows/app"
 	"github.com/gookit/slog"
 	"golang.org/x/sys/windows/svc"
 )
@@ -170,6 +171,9 @@ func editCrontab(path string) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
+	if err := writeCrontabExample(path); err != nil {
+		return err
+	}
 
 	editor := os.Getenv("VISUAL")
 	if editor == "" {
@@ -177,7 +181,11 @@ func editCrontab(path string) error {
 	}
 	var cmd *exec.Cmd
 	if editor == "" {
-		cmd = exec.Command("notepad.exe", path)
+		if codePath := findVSCode(); codePath != "" {
+			cmd = exec.Command(codePath, "--reuse-window", path)
+		} else {
+			cmd = exec.Command("notepad.exe", path)
+		}
 	} else {
 		shell := os.Getenv("ComSpec")
 		if shell == "" {
@@ -189,6 +197,66 @@ func editCrontab(path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+const crontabExample = `# crontab for Windows
+#
+# Format:
+#   minute hour day-of-month month day-of-week command
+#
+# Fields:
+#   minute        0-59
+#   hour          0-23
+#   day-of-month  1-31
+#   month         1-12
+#   day-of-week   0-6 (Sunday=0 or 7)
+#
+# Examples:
+#   Run every minute:
+# * * * * * curl.exe -I https://www.google.com
+#
+#   Run every 5 minutes:
+# */5 * * * * echo hello
+#
+#   Run at 09:00 every Monday:
+# 0 9 * * 1 powershell.exe -NoProfile -Command "Get-Date"
+
+`
+
+func writeCrontabExample(path string) error {
+	st, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if st.Size() > 0 {
+		return nil
+	}
+	return os.WriteFile(path, []byte(crontabExample), 0644)
+}
+
+func findVSCode() string {
+	for _, name := range []string{"code.cmd", "code.exe", "code"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	candidates := []string{
+		joinIfBase(os.Getenv("LOCALAPPDATA"), "Programs", "Microsoft VS Code", "bin", "code.cmd"),
+		joinIfBase(os.Getenv("LOCALAPPDATA"), "Programs", "Microsoft VS Code", "Code.exe"),
+		joinIfBase(os.Getenv("ProgramFiles"), "Microsoft VS Code", "bin", "code.cmd"),
+		joinIfBase(os.Getenv("ProgramFiles"), "Microsoft VS Code", "Code.exe"),
+		joinIfBase(os.Getenv("ProgramFiles(x86)"), "Microsoft VS Code", "bin", "code.cmd"),
+		joinIfBase(os.Getenv("ProgramFiles(x86)"), "Microsoft VS Code", "Code.exe"),
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func listCrontab(path string) error {
@@ -219,6 +287,13 @@ func filepathDir(path string) string {
 		return path[:i]
 	}
 	return "."
+}
+
+func joinIfBase(base string, parts ...string) string {
+	if base == "" {
+		return ""
+	}
+	return filepath.Join(append([]string{base}, parts...)...)
 }
 
 func quoteCmdArg(arg string) string {

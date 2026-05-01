@@ -10,7 +10,7 @@ package main
 import (
 	"context"
 
-	"github.com/dvgamerr/crontab/app"
+	"github.com/dvgamerr-app/crontab-windows/app"
 	"github.com/pkg/errors"
 )
 

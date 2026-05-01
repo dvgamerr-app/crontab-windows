@@ -1,4 +1,4 @@
-module github.com/dvgamerr/crontab
+module github.com/dvgamerr-app/crontab-windows
 
 go 1.25.0
 

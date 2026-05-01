@@ -5,7 +5,7 @@
 ## Install
 
 ```powershell
-go install github.com/dvgamerr/crontab/cmd/crontab@latest
+go install github.com/dvgamerr-app/crontab-windows/cmd/crontab@latest
 ```
 
 Running `crontab` with no arguments installs the Windows service for the current user's `.crontab`.

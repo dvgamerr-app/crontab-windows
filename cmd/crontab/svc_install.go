@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dvgamerr/crontab/app"
+	"github.com/dvgamerr-app/crontab-windows/app"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"

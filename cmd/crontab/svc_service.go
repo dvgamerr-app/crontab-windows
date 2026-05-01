@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/dvgamerr/crontab/app"
+	"github.com/dvgamerr-app/crontab-windows/app"
 	"github.com/gookit/slog"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/windows/svc"
