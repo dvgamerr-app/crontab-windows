@@ -12,9 +12,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/gookit/slog"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -47,11 +47,6 @@ type Schedule struct {
 type CronFile struct {
 	Jobs []Job
 	Env  map[string]string
-}
-
-type fileLogger struct {
-	path string
-	mu   sync.Mutex
 }
 
 type envEntry struct {
@@ -88,9 +83,19 @@ func DefaultLogPath() string {
 
 func RunScheduler(ctx context.Context, opts Options) error {
 	opts = normalizeOptions(opts)
-	logger := &fileLogger{path: opts.LogPath}
-	logger.Printf("scheduler started crontab=%q home=%q goos=%s", opts.CrontabPath, opts.HomeDir, runtime.GOOS)
-	defer logger.Printf("scheduler stopped")
+	logger, err := NewLogger(opts)
+	if err != nil {
+		return err
+	}
+	defer logger.Close()
+
+	return runScheduler(ctx, opts, logger)
+}
+
+func runScheduler(ctx context.Context, opts Options, logger *slog.Logger) error {
+	opts = normalizeOptions(opts)
+	logger.Infof("scheduler started crontab=%q home=%q goos=%s", opts.CrontabPath, opts.HomeDir, runtime.GOOS)
+	defer logger.Info("scheduler stopped")
 
 	next := nextMinute(time.Now())
 	timer := time.NewTimer(time.Until(next))
@@ -274,15 +279,15 @@ func MergedEnvironment(extra map[string]string) []string {
 	return out
 }
 
-func runDue(ctx context.Context, opts Options, logger *fileLogger, at time.Time) {
+func runDue(ctx context.Context, opts Options, logger *slog.Logger, at time.Time) {
 	cf, errs := ParseCrontab(opts.CrontabPath)
 	if len(errs) > 0 {
 		if len(errs) == 1 && os.IsNotExist(errs[0]) {
-			logger.Printf("no crontab file at %q", opts.CrontabPath)
+			logger.Infof("no crontab file at %q", opts.CrontabPath)
 			return
 		}
 		for _, err := range errs {
-			logger.Printf("crontab parse error: %v", err)
+			logger.Errorf("crontab parse error: %v", err)
 		}
 	}
 	for _, job := range cf.Jobs {
@@ -293,9 +298,9 @@ func runDue(ctx context.Context, opts Options, logger *fileLogger, at time.Time)
 	}
 }
 
-func runJob(ctx context.Context, opts Options, logger *fileLogger, job Job, at time.Time) {
+func runJob(ctx context.Context, opts Options, logger *slog.Logger, job Job, at time.Time) {
 	start := time.Now()
-	logger.Printf("line %d start at=%s command=%q", job.Line, at.Format(time.RFC3339), job.Command)
+	logger.Infof("line %d start at=%s command=%q", job.Line, at.Format(time.RFC3339), job.Command)
 
 	shell := os.Getenv("ComSpec")
 	if shell == "" {
@@ -307,13 +312,13 @@ func runJob(ctx context.Context, opts Options, logger *fileLogger, job Job, at t
 	out, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(out))
 	if output != "" {
-		logger.Printf("line %d output:\n%s", job.Line, output)
+		logger.Infof("line %d output:\n%s", job.Line, output)
 	}
 	if err != nil {
-		logger.Printf("line %d failed after %s: %v", job.Line, time.Since(start).Round(time.Millisecond), err)
+		logger.Errorf("line %d failed after %s: %v", job.Line, time.Since(start).Round(time.Millisecond), err)
 		return
 	}
-	logger.Printf("line %d finished after %s", job.Line, time.Since(start).Round(time.Millisecond))
+	logger.Infof("line %d finished after %s", job.Line, time.Since(start).Round(time.Millisecond))
 }
 
 func parseField(expr string, min, max int, aliases map[int]int, set func(int)) error {
@@ -414,25 +419,6 @@ func normalizeOptions(opts Options) Options {
 
 func nextMinute(t time.Time) time.Time {
 	return t.Truncate(time.Minute).Add(time.Minute)
-}
-
-func (l *fileLogger) Printf(format string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(l.path), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "log mkdir failed: %v\n", err)
-		return
-	}
-	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "log open failed: %v\n", err)
-		return
-	}
-	defer f.Close()
-
-	line := fmt.Sprintf(format, args...)
-	fmt.Fprintf(f, "%s %s\n", time.Now().Format(time.RFC3339), line)
 }
 
 func readRegistryEnvironment(root registry.Key, path string) map[string]string {

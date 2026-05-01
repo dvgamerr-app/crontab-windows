@@ -7,13 +7,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
 
 	"github.com/dvgamerr/crontab/app"
+	"github.com/gookit/slog"
 	"golang.org/x/sys/windows/svc"
 )
 
@@ -40,7 +40,8 @@ func usage(errmsg string) {
 func main() {
 	isIntSess, err := svc.IsAnInteractiveSession()
 	if err != nil {
-		log.Fatalf("failed to determine if we are running in an interactive session: %v", err)
+		slog.Errorf("failed to determine if we are running in an interactive session: %v", err)
+		os.Exit(1)
 	}
 	if !isIntSess {
 		runService(svcName, false)
@@ -48,7 +49,8 @@ func main() {
 	}
 
 	if err := runCLI(os.Args[1:]); err != nil {
-		log.Fatal(err)
+		slog.Error(err)
+		os.Exit(1)
 	}
 }
 
@@ -60,13 +62,13 @@ func runCLI(args []string) error {
 
 	switch parsed.command {
 	case "":
-		return installService(svcName, svcNameLong, parsed.opts)
+		return installAndStartService(svcName, svcNameLong, parsed.opts)
 	case "install":
-		return installService(svcName, svcNameLong, parsed.opts)
+		return installAndStartService(svcName, svcNameLong, parsed.opts)
 	case "remove":
 		return removeService(svcName)
 	case "start":
-		return startService(svcName)
+		return installAndStartService(svcName, svcNameLong, parsed.opts)
 	case "stop":
 		return controlService(svcName, svc.Stop, svc.Stopped)
 	case "pause":

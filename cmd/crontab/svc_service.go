@@ -2,16 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/dvgamerr/crontab/app"
+	"github.com/gookit/slog"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/windows/svc"
-	"golang.org/x/sys/windows/svc/debug"
-	"golang.org/x/sys/windows/svc/eventlog"
 )
-
-var elog debug.Log
 
 type myservice struct{}
 
@@ -32,7 +29,7 @@ loop:
 		select {
 		case err := <-done:
 			if err != nil && ctx.Err() == nil {
-				elog.Error(1, errors.Wrap(err, "svcLauncher").Error())
+				slog.Error(errors.Wrap(err, "svcLauncher").Error())
 			}
 			break loop
 		case c := <-r:
@@ -47,14 +44,14 @@ loop:
 				select {
 				case err := <-done:
 					if err != nil {
-						elog.Error(1, errors.Wrap(err, "svcLauncher").Error())
+						slog.Error(errors.Wrap(err, "svcLauncher").Error())
 					}
 				case <-time.After(10 * time.Second):
-					elog.Warning(1, "timeout waiting for scheduler shutdown")
+					slog.Warn("timeout waiting for scheduler shutdown")
 				}
 				break loop
 			default:
-				elog.Error(1, fmt.Sprintf("unexpected control request #%d", c))
+				slog.Errorf("unexpected control request #%d", c)
 			}
 		}
 	}
@@ -63,26 +60,25 @@ loop:
 }
 
 func runService(name string, isDebug bool) {
-	var err error
-	if isDebug {
-		elog = debug.New(name)
-	} else {
-		elog, err = eventlog.Open(name)
-		if err != nil {
-			return
-		}
+	opts := serviceOptionsFromArgs()
+	logger, err := app.NewLogger(opts)
+	if err != nil {
+		return
 	}
-	defer elog.Close()
+	defer logger.Close()
+	slog.Configure(func(sl *slog.SugaredLogger) {
+		sl.Logger = logger
+	})
 
-	elog.Info(1, fmt.Sprintf("%s: starting", name))
+	slog.Infof("%s: starting", name)
 	run := svc.Run
 	if isDebug {
-		run = debug.Run
+		run = svc.Run
 	}
 	err = run(name, &myservice{})
 	if err != nil {
-		elog.Error(1, fmt.Sprintf("%s service failed: %v", name, err))
+		slog.Errorf("%s service failed: %v", name, err)
 		return
 	}
-	elog.Info(1, fmt.Sprintf("%s: stopped", name))
+	slog.Infof("%s: stopped", name)
 }
