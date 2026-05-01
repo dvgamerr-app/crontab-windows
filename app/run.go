@@ -1,19 +1,19 @@
 package app
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 )
 
-// Run launches the service
-func Run(svcName, sha1ver string) error {
-
-	s, err := setup(wl, svcName, sha1ver)
+// Run launches the cron scheduler and blocks until ctx is canceled.
+func Run(ctx context.Context, svcName, sha1ver string, opts Options) error {
+	s, err := setup(svcName, sha1ver)
 	if err != nil {
 		return errors.Wrap(err, "setup")
 	}
 
-	// Your service should be launched as a GO routine
-	go yourApp(s)
+	_ = s
 
-	return nil
+	return RunScheduler(ctx, opts)
 }

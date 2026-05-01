@@ -8,26 +8,23 @@
 package main
 
 import (
-	"github.com/billgraziano/go-windows-svc/app"
+	"context"
+
+	"github.com/dvgamerr/crontab/app"
 	"github.com/pkg/errors"
 )
 
 // This is the name you will use for the NET START command
-const svcName = "gosvc"
+const svcName = "crontab"
 
 // This is the name that will appear in the Services control panel
-const svcNameLong = "GO Service"
+const svcNameLong = "Crontab for Windows"
 
 // This is assigned the full SHA1 hash from GIT
 var sha1ver string
 
-func svcLauncher() error {
-	elog, err := app.NewEventLog(svcNameLong)
-	if err != nil {
-		return errors.Wrap(err, "neweventlog")
-	}
-
-	err := app.Run(svcName, sha1ver)
+func svcLauncher(ctx context.Context) error {
+	err := app.Run(ctx, svcName, sha1ver, serviceOptionsFromArgs())
 	if err != nil {
 		return errors.Wrap(err, "app.run")
 	}

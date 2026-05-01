@@ -1,72 +1,59 @@
-# GO Windows Service Shell
+# Crontab for Windows Service
 
-This is based on the [GO Windows service example program](https://godoc.org/golang.org/x/sys/windows/svc/example) provided by the GO Project. 
-It is a project shell to create a Windows service.
+`crontab.exe` provides a Linux-style per-user crontab file on Windows and runs it from a Windows service.
 
-## Getting Started
+## Install
 
-The program compiles and runs on GO 1.8.  The generated executable accepts a single parameter.  The parameter values include:
+```powershell
+go install github.com/dvgamerr/crontab/cmd/crontab@latest
+```
 
-* debug - runs the program from the command-line
-* install - installs a windows service
-* remove - removes the windows service
-* start
-* stop
-* pause
-* continue
+Running `crontab` with no arguments installs the Windows service for the current user's `.crontab`.
 
-## Installing and Updating a Service
+```powershell
+crontab
+crontab start
+```
 
-After compiling an executable, the service can be installed from an Administrative command prompt.  Typing
+The service runs automatically on boot after it is installed.
 
-    YourExecutable.EXE install 
+## Commands
 
-will install the service.
+```powershell
+crontab -e
+crontab -l
+crontab -r
+crontab -u <user> -e
+crontab install
+crontab start
+crontab stop
+crontab remove
+crontab debug
+```
 
-To update the service, stop the service, replace the executble and restart the service.
+`crontab -e` opens `%USERPROFILE%\.crontab` in `%VISUAL%`, `%EDITOR%`, or Notepad.
 
-The service can be removed from an Administrative command prompt by typing:
+## Crontab Format
 
-    YourExecutable.EXE remove 
+```text
+* * * * * curl https://www.google.com
+- - - - -
+| | | | |
+| | | | +----- Day of the Week (0 - 6, Sunday=0 or 7)
+| | | +------- Month (1 - 12)
+| | +--------- Day of the Month (1 - 31)
+| +----------- Hour (0 - 23)
++------------- Minute (0 - 59)
+```
 
-## Customizing
+The parser supports `*`, lists, ranges, and steps such as `*/5`, `1,15`, and `9-17`.
 
-The code exists in two packabages
+## Logs
 
-* cmd/gosvc - Wrapper to control the service
-* app - Your application
+By default logs are written to:
 
-All service boilerplate code is in the four files in `cmd/gosvc` with a "svc_" prefix.  There should
-be no need to modify this code.
+```text
+%ProgramData%\crontab\crontab.log
+```
 
-The only code you should need to change is in main.go.
-
-* Replace the import of `github.com/billgraziano/go-windows-svc/app` with the path to your package.
-* `svcName` - This constant is the name of the installed service.  This is used for NET START and NET STOP commands.
-* `svcNameLong` - This is the longer service name that appears in the Services control panel.
-* `svcLauncher()` - This launches app.Run passing it a Windows Event Logger, the `svcName`, and the SHA1 hash from GIT.
-
-You should also rename the `gosvc` directory to the name of your executable.
-
-* `setup()` - This function is called to do any application setup.  If returns a non-nil error, the service will exit.
-* `yourApp()` - This is launched as a GO routine.  This is the body of your application.  Here you can launch web servers, listeners, or whatever your application does.
-
-
-
-## Advanced
-### Logging
-The `server` struct exposes a `winlog` variable that is a logger.  This will write to the console when running interactively and to the Winodws Application Event Log when running as a service.  I typically use this for any service errors, start and stop notification, and any issues reading configuration or setting up logging.
-
-### Other 
-This uses the [GO error wrapper package]("github.com/pkg/errors").  You can easily 
-remove it if you prefer not to use it.
-
-
-
-
-
-
-
-
-
-
+The scheduler reloads the crontab file every minute before running due jobs. Commands run through `cmd.exe /C` with the machine environment loaded so commands such as `curl` can be found through `PATH`.

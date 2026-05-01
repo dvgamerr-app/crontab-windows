@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build windows
 // +build windows
 
 package main
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dvgamerr/crontab/app"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 )
@@ -44,7 +46,7 @@ func exePath() (string, error) {
 	return "", err
 }
 
-func installService(name, desc string) error {
+func installService(name, desc string, opts app.Options) error {
 	exepath, err := exePath()
 	if err != nil {
 		return err
@@ -59,7 +61,16 @@ func installService(name, desc string) error {
 		s.Close()
 		return fmt.Errorf("service %s already exists", name)
 	}
-	s, err = m.CreateService(name, exepath, mgr.Config{DisplayName: desc}, "is", "auto-started")
+	opts = normalizeInstallOptions(opts)
+	s, err = m.CreateService(
+		name,
+		exepath,
+		mgr.Config{DisplayName: desc, Description: desc, StartType: mgr.StartAutomatic},
+		"service",
+		"--home", opts.HomeDir,
+		"--file", opts.CrontabPath,
+		"--log", opts.LogPath,
+	)
 	if err != nil {
 		return err
 	}
@@ -70,6 +81,20 @@ func installService(name, desc string) error {
 		return fmt.Errorf("SetupEventLogSource() failed: %s", err)
 	}
 	return nil
+}
+
+func normalizeInstallOptions(opts app.Options) app.Options {
+	defaults := app.DefaultOptions()
+	if opts.HomeDir == "" {
+		opts.HomeDir = defaults.HomeDir
+	}
+	if opts.CrontabPath == "" {
+		opts.CrontabPath = app.CrontabPathForHome(opts.HomeDir)
+	}
+	if opts.LogPath == "" {
+		opts.LogPath = defaults.LogPath
+	}
+	return opts
 }
 
 func removeService(name string) error {
